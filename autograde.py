@@ -1,5 +1,3 @@
-token = "6b0f1060ffb0459dac1f8e3bd9dafb1d"
-
 import os
 import json
 import logging
@@ -13,7 +11,6 @@ from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 log = logging.getLogger(__name__)
 
 
@@ -163,11 +160,13 @@ def exec_command(api, name, namespace, command):
     return res
 
 
-def kubernetes_magic(name, namespace):
+def kubernetes_magic(user, namespace):
     config.load_kube_config()
     api = client.CoreV1Api()
+    pod = f"jupyter-{user}"
+    pod_exists = None
     try:
-        pod = api.read_namespaced_pod(namespace=namespace, name=name)
+        pod_exists = api.read_namespaced_pod(namespace=namespace, name=pod)
     except ApiException as e:
         if e.status == 404:
             print("pod not found")
@@ -175,12 +174,12 @@ def kubernetes_magic(name, namespace):
             print("something broken")
         return
 
-    if pod:
+    if pod_exists:
         os.system(
-            f"kubectl cp get_names.py {name}:/home/jovyan/get_names.py -n {namespace}"
+            f"kubectl cp get_names.py {pod}:/home/jovyan/get_names.py -n {namespace}"
         )
 
-        res = exec_command(api, name, namespace, "python get_names.py").strip()
+        res = exec_command(api, pod, namespace, "python get_names.py").strip()
         names = [] if res == "" else res.split("\n")
 
         for n in names:
@@ -193,16 +192,15 @@ def kubernetes_magic(name, namespace):
 
             for c in commands:
                 print(f"Running command: {c}")
-                res = exec_command(api, name, namespace, c)
+                res = exec_command(api, pod, namespace, c)
                 print(res.strip())
 
 
 def main():
-    """
-    Start and stop one server
-    """
+    token = "6b0f1060ffb0459dac1f8e3bd9dafb1d"
     user = "lauritko"
     hub_url = "https://test.localhost"
+    namespace = "test"
 
     # session = make_session(get_token())
     session = make_session(token)
@@ -211,12 +209,13 @@ def main():
     r.raise_for_status()
     log.info(f"Server status: {r.text}")
 
-    kubernetes_magic(f"jupyter-{user}", "test")
+    kubernetes_magic(user, namespace)
     # time.sleep(100)
 
     stop_server(session, hub_url, user)
 
 
 if __name__ == "__main__":
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     logging.basicConfig(level=logging.INFO)
     main()
