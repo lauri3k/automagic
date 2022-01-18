@@ -1,15 +1,11 @@
-import os
 import json
 import logging
 import pathlib
 import time
+import base64
 
 import requests
 import urllib3
-
-from kubernetes import client, config
-from kubernetes.client.rest import ApiException
-from kubernetes.stream import stream
 
 log = logging.getLogger(__name__)
 
@@ -145,62 +141,64 @@ def stop_server(session, hub_url, user, server_name=""):
         time.sleep(1)
 
 
-def exec_command(api, name, namespace, command):
-    ex = ["/bin/sh", "-c", command]
-    res = stream(
-        api.connect_get_namespaced_pod_exec,
-        name,
-        namespace,
-        command=ex,
-        stderr=True,
-        stdin=False,
-        stdout=True,
-        tty=False,
-    )
-    return res
+def make_notebook_session(session, hub_url, user):
+    user_url = f"{hub_url}/hub/api/users/{user}"
+    tokens_url = f"{user_url}/tokens"
+    r = session.post(tokens_url)
+    token = r.json().get("token")
+    return make_session(token)
 
 
-def kubernetes_magic(user, namespace):
-    config.load_kube_config()
-    api = client.CoreV1Api()
-    pod = f"jupyter-{user}"
-    pod_exists = None
-    try:
-        pod_exists = api.read_namespaced_pod(namespace=namespace, name=pod)
-    except ApiException as e:
-        if e.status == 404:
-            print("pod not found")
-        else:
-            print("something broken")
-        return
+def create_terminal(session, hub_url, user):
 
-    if pod_exists:
-        os.system(
-            f"kubectl cp get_names.py {pod}:/home/jovyan/get_names.py -n {namespace}"
-        )
+    terminal_url = f"{hub_url}/user/{user}/api/terminals"
 
-        res = exec_command(api, pod, namespace, "python get_names.py").strip()
-        names = [] if res == "" else res.split("\n")
+    r = session.post(terminal_url)
 
-        for n in names:
-            commands = [
-                f"nbgrader collect {n}",
-                f"nbgrader autograde {n}",
-                f"nbgrader generate_feedback {n}",
-                f"nbgrader release_feedback {n}",
-            ]
+    print(r.status_code)
+    print(r.json())
 
-            for c in commands:
-                print(f"Running command: {c}")
-                res = exec_command(api, pod, namespace, c)
-                print(res.strip())
+
+def create_files(session, hub_url, user):
+    file_url = f"{hub_url}/user/{user}/api/contents"
+
+    filename = ".profile"
+
+    data = {
+        "path": f"/home/jovyan/{filename}",
+        "name": filename,
+        "content": "python automagic.py",
+        "type": "file",
+        "format": "text",
+    }
+
+    r = session.put(f"{file_url}/{filename}", data=json.dumps(data))
+
+    print(r.status_code)
+    print(r.json())
+
+    with open("magic.py", "rb") as magic:
+        b64data = base64.b64encode(magic.read())
+        filename = "automagic.py"
+
+        data = {
+            "path": f"/home/jovyan/{filename}",
+            "name": filename,
+            "content": b64data.decode("utf-8"),
+            "type": "file",
+            "format": "base64",
+        }
+
+        r = session.put(f"{file_url}/{filename}", data=json.dumps(data))
+
+        print(r.status_code)
+        print(r.json())
 
 
 def main():
-    token = "6b0f1060ffb0459dac1f8e3bd9dafb1d"
-    user = "lauritko"
+    token = "b7f76827b02e40c59dc571f544eeb923"
+    user = "roboto"
     hub_url = "https://test.localhost"
-    namespace = "test"
 
     # session = make_session(get_token())
     session = make_session(token)
@@ -209,10 +207,11 @@ def main():
     r.raise_for_status()
     log.info(f"Server status: {r.text}")
 
-    kubernetes_magic(user, namespace)
-    # time.sleep(100)
+    nb_session = make_notebook_session(session, hub_url, user)
+    create_files(nb_session, hub_url, user)
+    create_terminal(nb_session, hub_url, user)
 
-    stop_server(session, hub_url, user)
+    # stop_server(session, hub_url, user)
 
 
 if __name__ == "__main__":
