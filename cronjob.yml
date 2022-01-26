@@ -16,7 +16,7 @@ spec:
                 - name: HUB_TOKEN
                   valueFrom:
                     secretKeyRef:
-                      name: hub-token
+                      name: admin-hub-token
                       key: token
               imagePullPolicy: IfNotPresent
           restartPolicy: OnFailure
