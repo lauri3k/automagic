@@ -2,6 +2,7 @@ apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: autograde
+  namespace: sandbox
 spec:
   schedule: "*/2 * * * *"
   jobTemplate:
@@ -15,7 +16,7 @@ spec:
                 - name: HUB_TOKEN
                   valueFrom:
                     secretKeyRef:
-                      name: token
+                      name: hub-token
                       key: token
               imagePullPolicy: IfNotPresent
           restartPolicy: OnFailure
