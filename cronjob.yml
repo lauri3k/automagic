@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: autograde
+spec:
+  schedule: "*/2 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: autograde
+              image: lauri3k/autograde:latest
+              env:
+                - name: HUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: token
+                      key: token
+              imagePullPolicy: IfNotPresent
+          restartPolicy: OnFailure

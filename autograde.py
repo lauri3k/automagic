@@ -3,6 +3,7 @@ import logging
 import pathlib
 import time
 import base64
+import os
 
 import requests
 import urllib3
@@ -196,9 +197,9 @@ def create_files(session, hub_url, user):
 
 
 def main():
-    token = "b7f76827b02e40c59dc571f544eeb923"
-    user = "roboto"
-    hub_url = "https://test.localhost"
+    token = os.environ.get("HUB_TOKEN", "1234")
+    user = "lauritko"
+    hub_url = "https://sandbox.apps.stack.it.ntnu.no"
 
     # session = make_session(get_token())
     session = make_session(token)
@@ -211,6 +212,7 @@ def main():
     create_files(nb_session, hub_url, user)
     create_terminal(nb_session, hub_url, user)
 
+    # time.sleep(2700)
     # stop_server(session, hub_url, user)
 
 

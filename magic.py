@@ -4,10 +4,16 @@ from nbgrader.apps import NbGraderAPI
 from ngshare_exchange import configureExchange
 
 c = get_config()
-c = get_config()
 configureExchange(c, "http://ngshare:8080/services/ngshare")
 c.CourseDirectory.course_id = os.environ["RELEASE_NAME"]
 c.CourseDirectory.root = os.environ["HOME"] + "/courses/" + os.environ["RELEASE_NAME"]
+
+c.GenerateFeedback.preprocessors = [
+    "nbgrader.preprocessors.GetGrades",
+    "nbconvert.preprocessors.CSSHTMLHeaderPreprocessor",
+    "nbgrader.preprocessors.ClearHiddenTests",
+    "nbgrader.preprocessors.ClearOutput",
+]
 
 api = NbGraderAPI(config=c)
 assignments = []
