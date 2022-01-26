@@ -4,6 +4,7 @@ import pathlib
 import time
 import base64
 import os
+from datetime import datetime
 
 import requests
 import urllib3
@@ -160,6 +161,18 @@ def create_terminal(session, hub_url, user):
     print(r.json())
 
 
+def clear_old_terminals(session, hub_url, user, threshold_in_s=1800):
+    terminal_url = f"{hub_url}/user/{user}/api/terminals"
+    r = session.get(terminal_url)
+
+    if r.status_code == 200:
+        t1 = datetime.utcnow()
+        for t in r.json():
+            t2 = datetime.strptime(t["last_activity"], "%Y-%m-%dT%H:%M:%S.%fZ")
+            if (t1 - t2).seconds > threshold_in_s:
+                r = session.delete(f"{terminal_url}/{t['name']}")
+
+
 def create_files(session, hub_url, user):
     file_url = f"{hub_url}/user/{user}/api/contents"
 
@@ -209,6 +222,8 @@ def main():
     log.info(f"Server status: {r.text}")
 
     nb_session = make_notebook_session(session, hub_url, user)
+
+    clear_old_terminals(nb_session, hub_url, user)
     create_files(nb_session, hub_url, user)
     create_terminal(nb_session, hub_url, user)
 

@@ -27,5 +27,5 @@ for n in assignments:
     students = api.get_submitted_students(n)
     for s in students:
         print(api.autograde(n, s))
-    print(api.generate_feedback(n))
+    print(api.generate_feedback(n, force=False))
     print(api.release_feedback(n))
