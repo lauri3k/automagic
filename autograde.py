@@ -157,8 +157,11 @@ def create_terminal(session, hub_url, user):
 
     r = session.post(terminal_url)
 
-    print(r.status_code)
-    print(r.json())
+    if r.status_code == 200:
+        print("Successfully created a new terminal.")
+        print(r.json())
+    else:
+        print("Failed creating a terminal.")
 
 
 def clear_old_terminals(session, hub_url, user, threshold_in_s=1800):
@@ -166,20 +169,24 @@ def clear_old_terminals(session, hub_url, user, threshold_in_s=1800):
     r = session.get(terminal_url)
 
     if r.status_code == 200:
+        print(f"Clearing terminals older than {threshold_in_s} seconds.")
         t1 = datetime.utcnow()
         for t in r.json():
             t2 = datetime.strptime(t["last_activity"], "%Y-%m-%dT%H:%M:%S.%fZ")
             if (t1 - t2).seconds > threshold_in_s:
                 r = session.delete(f"{terminal_url}/{t['name']}")
+    else:
+        print("Failed clearing old terminals.")
 
 
 def create_files(session, hub_url, user):
     file_url = f"{hub_url}/user/{user}/api/contents"
 
     filename = ".profile"
+    path = f"/home/jovyan/{filename}"
 
     data = {
-        "path": f"/home/jovyan/{filename}",
+        "path": path,
         "name": filename,
         "content": "python automagic.py",
         "type": "file",
@@ -188,15 +195,19 @@ def create_files(session, hub_url, user):
 
     r = session.put(f"{file_url}/{filename}", data=json.dumps(data))
 
-    print(r.status_code)
-    print(r.json())
+    if r.status_code == 200:
+        print(f"Succesfully created file: {path}")
+        print(r.json())
+    else:
+        print(f"Failed creating file: {path}")
 
     with open("magic.py", "rb") as magic:
         b64data = base64.b64encode(magic.read())
         filename = "automagic.py"
+        path = f"/home/jovyan/{filename}"
 
         data = {
-            "path": f"/home/jovyan/{filename}",
+            "path": path,
             "name": filename,
             "content": b64data.decode("utf-8"),
             "type": "file",
@@ -205,12 +216,15 @@ def create_files(session, hub_url, user):
 
         r = session.put(f"{file_url}/{filename}", data=json.dumps(data))
 
-        print(r.status_code)
-        print(r.json())
+        if r.status_code == 200:
+            print(f"Succesfully created file: {path}")
+            print(r.json())
+        else:
+            print(f"Failed creating file: {path}")
 
 
 def main():
-    token = os.environ.get("HUB_TOKEN", "1234")
+    token = os.environ.get("HUB_TOKEN", "123thisisnotarealtokenbeepboop321")
     user = "lauritko"
     hub_url = "https://sandbox.apps.stack.it.ntnu.no"
 
