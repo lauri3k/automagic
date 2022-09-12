@@ -11,8 +11,12 @@ spec:
         spec:
           containers:
             - name: autograde
-              image: lauri3k/autograde:latest
+              image: lauri3k/autograde:v0.02
               env:
+                - name: HUB_URL
+                  value: "https://sandbox.apps.stack.it.ntnu.no"
+                - name: HUB_USER
+                  - value: "lauritko"
                 - name: HUB_TOKEN
                   valueFrom:
                     secretKeyRef:
