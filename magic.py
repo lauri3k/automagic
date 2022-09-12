@@ -7,7 +7,7 @@ c = get_config()
 configureExchange(c, "http://ngshare:8080/services/ngshare")
 c.CourseDirectory.course_id = os.environ["RELEASE_NAME"]
 c.CourseDirectory.root = os.environ["HOME"] + "/courses/" + os.environ["RELEASE_NAME"]
-# c.CourseDirectory.db_url = "VERY VERY IMPORTANT"
+c.CourseDirectory.db_url = os.getenv("NBGRADER_DB_URL")
 
 c.GenerateFeedback.preprocessors = [
     "nbgrader.preprocessors.GetGrades",
