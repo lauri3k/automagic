@@ -4,19 +4,19 @@ metadata:
   name: autograde
   namespace: sandbox
 spec:
-  schedule: "@hourly"
+  schedule: '@hourly'
   jobTemplate:
     spec:
       template:
         spec:
           containers:
             - name: autograde
-              image: lauri3k/autograde:v0.02
+              image: quay.io/ntnu/autograde:latest
               env:
                 - name: HUB_URL
-                  value: "https://sandbox.apps.stack.it.ntnu.no"
+                  value: 'https://sandbox.apps.stack.it.ntnu.no'
                 - name: HUB_USER
-                  - value: "lauritko"
+                  value: 'lauritko'
                 - name: HUB_TOKEN
                   valueFrom:
                     secretKeyRef:
