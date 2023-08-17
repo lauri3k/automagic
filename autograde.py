@@ -5,6 +5,7 @@ import time
 import base64
 import os
 from datetime import datetime
+from websocket import create_connection
 
 import requests
 import urllib3
@@ -160,8 +161,9 @@ def create_terminal(session, hub_url, user):
     if r.status_code == 200:
         print("Successfully created a new terminal.")
         print(r.json())
-    else:
-        print("Failed creating a terminal.")
+        return r.json().get("name")
+
+    print("Failed creating a terminal.")
 
 
 def clear_old_terminals(session, hub_url, user, threshold_in_s=1800):
@@ -182,56 +184,71 @@ def clear_old_terminals(session, hub_url, user, threshold_in_s=1800):
 def create_files(session, hub_url, user):
     file_url = f"{hub_url}/user/{user}/api/contents"
 
-    filename = ".profile"
+    # filename = ".profile"
+    # path = f"/home/jovyan/{filename}"
+
+    # data = {
+    #     "path": path,
+    #     "name": filename,
+    #     "content": "python automagic.py",
+    #     "type": "file",
+    #     "format": "text",
+    # }
+
+    # r = session.put(f"{file_url}/{filename}", data=json.dumps(data))
+    # print(r.status_code)
+
+    # if r.status_code == 201:
+    #     print(f"Succesfully created file: {path}")
+    #     print(r.json())
+    # else:
+    #     print(f"Failed creating file: {path}")
+    #     print(r.json())
+
+    with open("magic.py", "rb") as magic:
+        b64data = base64.b64encode(magic.read())
+    filename = "automagic.py"
     path = f"/home/jovyan/{filename}"
 
     data = {
         "path": path,
         "name": filename,
-        "content": "python automagic.py",
+        "content": b64data.decode("utf-8"),
         "type": "file",
-        "format": "text",
+        "format": "base64",
     }
 
     r = session.put(f"{file_url}/{filename}", data=json.dumps(data))
+    print(r.status_code)
 
-    if r.status_code == 200:
+    if r.status_code == 200 or r.status_code == 201:
         print(f"Succesfully created file: {path}")
         print(r.json())
     else:
         print(f"Failed creating file: {path}")
+        print(r.json())
 
-    with open("magic.py", "rb") as magic:
-        b64data = base64.b64encode(magic.read())
-        filename = "automagic.py"
-        path = f"/home/jovyan/{filename}"
 
-        data = {
-            "path": path,
-            "name": filename,
-            "content": b64data.decode("utf-8"),
-            "type": "file",
-            "format": "base64",
-        }
+def send_command(terminal_id, hub_url, user, token):
+    headers = {"Authorization": f"token {token}"}
 
-        r = session.put(f"{file_url}/{filename}", data=json.dumps(data))
+    ws_url = f"wss://{hub_url.replace('https://', '')}/user/{user}/terminals/websocket/{terminal_id}"
 
-        if r.status_code == 200:
-            print(f"Succesfully created file: {path}")
-            print(r.json())
-        else:
-            print(f"Failed creating file: {path}")
+    ws = create_connection(ws_url, header=headers)
+    print(ws.recv())
+    ws.send('["stdin","python automagic.py\\r"]')  # type:ignore
+    print(ws.recv())
+    ws.close()
 
 
 def main():
-    token = os.environ.get("HUB_TOKEN", "123thisisnotarealtokenbeepboop321")
-    user = os.environ.get("HUB_USER")
-    hub_url = os.environ.get("HUB_URL")
+    token = os.environ.get("HUB_TOKEN", "490b33dce82f4b20ad0ab46aab5f11a8")
+    user = os.environ.get("HUB_USER", "lauritko")
+    hub_url = os.environ.get("HUB_URL", "https://test.apps.stack.it.ntnu.no")
 
     if not user or not hub_url:
         return
 
-    # session = make_session(get_token())
     session = make_session(token)
     server_url = start_server(session, hub_url, user)
     r = session.get(f"{server_url}/api/status")
@@ -242,7 +259,10 @@ def main():
 
     clear_old_terminals(nb_session, hub_url, user)
     create_files(nb_session, hub_url, user)
-    create_terminal(nb_session, hub_url, user)
+    terminal_id = create_terminal(nb_session, hub_url, user)
+
+    if terminal_id:
+        send_command(terminal_id, hub_url, user, token)
 
     # time.sleep(2700)
     # stop_server(session, hub_url, user)
