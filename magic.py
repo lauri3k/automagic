@@ -8,7 +8,7 @@ from traitlets.config import get_config
 from nbgrader.apps import NbGraderAPI
 from nbgrader.utils import parse_utc
 
-GRACE_PERIOD = int(os.environ.get("GRACE_PERIOD", 5))
+GRACE_PERIOD = int(os.environ.get("GRACE_PERIOD", 15))
 CHECKPOINT_PATH = "/home/jovyan/.ipynb_checkpoints"
 CONFIG_PATH = "/etc/jupyter/nbgrader_config.py"
 
@@ -71,15 +71,21 @@ for assignment in assignments:
             #     if ts and parse_utc(due_date) < parse_utc(ts):
             #         print(f"Skipping '{student}' as submission is past due.")
             #         continue
-            log.info(f"Autograding student '{student}'.")
             res_autograde = api.autograde(name, student, force=False)
+            # print(json.dumps(res_autograde, indent=2))
+            autograde_log = res_autograde.get("log")
+            if (
+                autograde_log
+                and isinstance(autograde_log, str)
+                and not "Skipping existing assignment" in autograde_log
+            ):
+                log.info(f"Autograded submission for student '{student}'.")
             if res_autograde.get("success") is not True:
                 log.error(json.dumps(res_autograde, indent=2))
         log.info(f"Generating feedback for assignment '{name}'.")
         res_generate = api.generate_feedback(name, force=False)
         if res_generate.get("success") is not True:
             log.error(json.dumps(res_generate, indent=2))
-
         log.info(f"Releasing feedback for assignment '{name}'.")
         res_release = api.release_feedback(name)
         if res_release.get("success") is not True:
