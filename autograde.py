@@ -4,13 +4,16 @@ import pathlib
 import time
 import base64
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from websocket import create_connection
 
 import requests
-import urllib3
+
+# import urllib3
 
 log = logging.getLogger(__name__)
+# urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+logging.basicConfig(level=logging.INFO)
 
 
 def get_token():
@@ -30,7 +33,7 @@ def make_session(token):
     """Create a requests.Session with our service token in the Authorization header"""
     session = requests.Session()
     session.headers = {"Authorization": f"token {token}"}
-    session.verify = False
+    # session.verify = False
     return session
 
 
@@ -147,23 +150,25 @@ def stop_server(session, hub_url, user, server_name=""):
 def make_notebook_session(session, hub_url, user):
     user_url = f"{hub_url}/hub/api/users/{user}"
     tokens_url = f"{user_url}/tokens"
-    r = session.post(tokens_url)
+    r = session.post(
+        tokens_url, json={"expires_in": 3600, "note": "autograde_nb_token"}
+    )
     token = r.json().get("token")
     return make_session(token)
 
 
 def create_terminal(session, hub_url, user):
-
     terminal_url = f"{hub_url}/user/{user}/api/terminals"
 
     r = session.post(terminal_url)
 
     if r.status_code == 200:
-        print("Successfully created a new terminal.")
-        print(r.json())
+        log.info("Successfully created a new terminal.")
+        # log.info(r.json())
         return r.json().get("name")
 
-    print("Failed creating a terminal.")
+    log.error("Failed creating a terminal.")
+    return None
 
 
 def clear_old_terminals(session, hub_url, user, threshold_in_s=1800):
@@ -171,39 +176,19 @@ def clear_old_terminals(session, hub_url, user, threshold_in_s=1800):
     r = session.get(terminal_url)
 
     if r.status_code == 200:
-        print(f"Clearing terminals older than {threshold_in_s} seconds.")
-        t1 = datetime.utcnow()
+        log.info(f"Clearing terminals older than {threshold_in_s} seconds.")
+        t1 = datetime.now(UTC)
         for t in r.json():
             t2 = datetime.strptime(t["last_activity"], "%Y-%m-%dT%H:%M:%S.%fZ")
+            t2 = t2.replace(tzinfo=UTC)
             if (t1 - t2).seconds > threshold_in_s:
                 r = session.delete(f"{terminal_url}/{t['name']}")
     else:
-        print("Failed clearing old terminals.")
+        log.error("Failed clearing old terminals.")
 
 
 def create_files(session, hub_url, user):
     file_url = f"{hub_url}/user/{user}/api/contents"
-
-    # filename = ".profile"
-    # path = f"/home/jovyan/{filename}"
-
-    # data = {
-    #     "path": path,
-    #     "name": filename,
-    #     "content": "python automagic.py",
-    #     "type": "file",
-    #     "format": "text",
-    # }
-
-    # r = session.put(f"{file_url}/{filename}", data=json.dumps(data))
-    # print(r.status_code)
-
-    # if r.status_code == 201:
-    #     print(f"Succesfully created file: {path}")
-    #     print(r.json())
-    # else:
-    #     print(f"Failed creating file: {path}")
-    #     print(r.json())
 
     with open("magic.py", "rb") as magic:
         b64data = base64.b64encode(magic.read())
@@ -219,32 +204,39 @@ def create_files(session, hub_url, user):
     }
 
     r = session.put(f"{file_url}/{filename}", data=json.dumps(data))
-    print(r.status_code)
 
-    if r.status_code == 200 or r.status_code == 201:
-        print(f"Succesfully created file: {path}")
-        print(r.json())
+    if r.status_code in (200, 201):
+        log.info(f"Succesfully created file: {path}")
+        # log.info(r.json())
     else:
-        print(f"Failed creating file: {path}")
-        print(r.json())
+        log.error(f"Failed creating file: {path}")
+        # log.error(r.json())
 
 
-def send_command(terminal_id, hub_url, user, token):
+def send_command(command, terminal_id, hub_url, user, token):
     headers = {"Authorization": f"token {token}"}
-
     ws_url = f"wss://{hub_url.replace('https://', '')}/user/{user}/terminals/websocket/{terminal_id}"
-
     ws = create_connection(ws_url, header=headers)
-    print(ws.recv())
-    ws.send('["stdin","python automagic.py\\r"]')  # type:ignore
-    print(ws.recv())
+    log.info(f"Sending command '{command}' to terminal.")
+    ws.send(command)
+
+    start = time.time()
+    while time.time() < start + 30:  # Try to get correct response for 30 seconds.
+        resp = ws.recv()
+        if "Starting autograding." in resp:
+            log.info("Successfully started autograding.")
+            break
+        time.sleep(1)
+    else:
+        log.error("Failed to start autograding.")
     ws.close()
 
 
 def main():
-    token = os.environ.get("HUB_TOKEN", "490b33dce82f4b20ad0ab46aab5f11a8")
+    token = os.environ.get("HUB_TOKEN", "beepboop12345notarealtoken")
     user = os.environ.get("HUB_USER", "lauritko")
-    hub_url = os.environ.get("HUB_URL", "https://test.apps.stack.it.ntnu.no")
+    hub_url = os.environ.get("HUB_URL", "https://test.testapps.stack.it.ntnu.no")
+    command = '["stdin","python automagic.py\\r"]'
 
     if not user or not hub_url:
         return
@@ -262,13 +254,8 @@ def main():
     terminal_id = create_terminal(nb_session, hub_url, user)
 
     if terminal_id:
-        send_command(terminal_id, hub_url, user, token)
-
-    # time.sleep(2700)
-    # stop_server(session, hub_url, user)
+        send_command(command, terminal_id, hub_url, user, token)
 
 
 if __name__ == "__main__":
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    logging.basicConfig(level=logging.INFO)
     main()
